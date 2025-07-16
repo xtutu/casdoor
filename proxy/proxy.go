@@ -15,15 +15,14 @@
 package proxy
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/casdoor/casdoor/conf"
-	"golang.org/x/net/proxy"
 )
 
 var (
@@ -59,23 +58,19 @@ func isAddressOpen(address string) bool {
 func getProxyHttpClient() *http.Client {
 	socks5Proxy := conf.GetConfigString("socks5Proxy")
 	if socks5Proxy == "" {
+		fmt.Println("Socks5 proxy is not configured, using default HTTP client")
 		return &http.Client{}
 	}
 
-	if !isAddressOpen(socks5Proxy) {
-		return &http.Client{}
-	}
-
-	// https://stackoverflow.com/questions/33585587/creating-a-go-socks5-client
-	dialer, err := proxy.SOCKS5("tcp", socks5Proxy, nil, proxy.Direct)
+	proxyURL, err := url.Parse(socks5Proxy)
 	if err != nil {
-		panic(err)
+		fmt.Println("Socks5 parse error using default HTTP client", err)
+		return &http.Client{}
 	}
-
-	tr := &http.Transport{Dial: dialer.Dial, TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	return &http.Client{
-		Transport: tr,
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL), // 支持 HTTP/SOCKS5 代理
 	}
+	return &http.Client{Transport: transport}
 }
 
 func GetHttpClient(url string) *http.Client {
