@@ -345,6 +345,15 @@ func isProxyProviderType(providerType string) bool {
 		"Uber",
 		"Yahoo",
 	}
+
+	// 添加额外的类型
+	appendList := strings.Split(strings.TrimSpace(conf.GetConfigString("proxyProviderList")), "|")
+	if len(appendList) > 0 {
+		for _, providerType := range appendList {
+			providerTypes = append(providerTypes, providerType)
+		}
+	}
+	// ~添加额外的类型
 	for _, v := range providerTypes {
 		if strings.EqualFold(v, providerType) {
 			return true
