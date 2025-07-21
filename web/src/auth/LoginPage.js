@@ -38,6 +38,7 @@ import {RequiredMfa} from "./mfa/MfaAuthVerifyForm";
 import {GoogleOneTapLoginVirtualButton} from "./GoogleLoginButton";
 import * as ProviderButton from "./ProviderButton";
 import {goToLink} from "../Setting";
+import WeChatLoginPanel from "./WeChatLoginPanel";
 const FaceRecognitionCommonModal = lazy(() => import("../common/modal/FaceRecognitionCommonModal"));
 const FaceRecognitionModal = lazy(() => import("../common/modal/FaceRecognitionModal"));
 
@@ -346,7 +347,7 @@ class LoginPage extends React.Component {
       return;
     }
 
-    if (resp.data2) {
+    if (resp.data3) {
       sessionStorage.setItem("signinUrl", window.location.pathname + window.location.search);
       Setting.goToLinkSoft(ths, `/forget/${application.name}`);
       return;
@@ -436,18 +437,26 @@ class LoginPage extends React.Component {
         values["password"] = passwordCipher;
       }
       const captchaRule = this.getCaptchaRule(this.getApplicationObj());
-      if (captchaRule === CaptchaRule.Always) {
-        this.setState({
-          openCaptchaModal: true,
-          values: values,
-        });
-        return;
-      } else if (captchaRule === CaptchaRule.Dynamic) {
-        this.checkCaptchaStatus(values);
-        return;
-      } else if (captchaRule === CaptchaRule.InternetOnly) {
-        this.checkCaptchaStatus(values);
-        return;
+      const application = this.getApplicationObj();
+      const noModal = application?.signinItems.map(signinItem => signinItem.name === "Captcha" && signinItem.rule === "inline").includes(true);
+      if (!noModal) {
+        if (captchaRule === CaptchaRule.Always) {
+          this.setState({
+            openCaptchaModal: true,
+            values: values,
+          });
+          return;
+        } else if (captchaRule === CaptchaRule.Dynamic) {
+          this.checkCaptchaStatus(values);
+          return;
+        } else if (captchaRule === CaptchaRule.InternetOnly) {
+          this.checkCaptchaStatus(values);
+          return;
+        }
+      } else {
+        values["captchaType"] = this.state?.captchaValues?.captchaType;
+        values["captchaToken"] = this.state?.captchaValues?.captchaToken;
+        values["clientSecret"] = this.state?.captchaValues?.clientSecret;
       }
     }
     this.login(values);
@@ -774,7 +783,7 @@ class LoginPage extends React.Component {
               </>
           }
           {
-            this.renderCaptchaModal(application)
+            application?.signinItems.map(signinItem => signinItem.name === "Captcha" && signinItem.rule === "inline").includes(true) ? null : this.renderCaptchaModal(application, false)
           }
         </Form.Item>
       );
@@ -818,6 +827,8 @@ class LoginPage extends React.Component {
           </Form.Item>
         </div>
       );
+    } else if (signinItem.name === "Captcha" && signinItem.rule === "inline") {
+      return this.renderCaptchaModal(application, true);
     } else if (signinItem.name.startsWith("Text ") || signinItem?.isCustom) {
       return (
         <div key={resultItemKey} dangerouslySetInnerHTML={{__html: signinItem.customCss}} />
@@ -875,6 +886,10 @@ class LoginPage extends React.Component {
         loginWidth += 40;
       } else if (Setting.getLanguage() === "ru") {
         loginWidth += 10;
+      }
+
+      if (this.state.loginMethod === "wechat") {
+        return (<WeChatLoginPanel application={application} renderFormItem={this.renderFormItem.bind(this)} loginMethod={this.state.loginMethod} loginWidth={loginWidth} renderMethodChoiceBox={this.renderMethodChoiceBox.bind(this)} />);
       }
 
       return (
@@ -959,7 +974,7 @@ class LoginPage extends React.Component {
     });
   }
 
-  renderCaptchaModal(application) {
+  renderCaptchaModal(application, noModal) {
     if (this.getCaptchaRule(this.getApplicationObj()) === CaptchaRule.Never) {
       return null;
     }
@@ -988,6 +1003,12 @@ class LoginPage extends React.Component {
       owner={provider.owner}
       name={provider.name}
       visible={this.state.openCaptchaModal}
+      noModal={noModal}
+      onUpdateToken={(captchaType, captchaToken, clientSecret) => {
+        this.setState({captchaValues: {
+          captchaType, captchaToken, clientSecret,
+        }});
+      }}
       onOk={(captchaType, captchaToken, clientSecret) => {
         const values = this.state.values;
         values["captchaType"] = captchaType;
@@ -1204,6 +1225,7 @@ class LoginPage extends React.Component {
       [generateItemKey("WebAuthn", "None"), {label: i18next.t("login:WebAuthn"), key: "webAuthn"}],
       [generateItemKey("LDAP", "None"), {label: i18next.t("login:LDAP"), key: "ldap"}],
       [generateItemKey("Face ID", "None"), {label: i18next.t("login:Face ID"), key: "faceId"}],
+      [generateItemKey("WeChat", "None"), {label: i18next.t("login:WeChat"), key: "wechat"}],
     ]);
 
     application?.signinMethods?.forEach((signinMethod) => {
@@ -1225,7 +1247,7 @@ class LoginPage extends React.Component {
     if (items.length > 1) {
       return (
         <div>
-          <Tabs className="signin-methods" items={items} size={"small"} defaultActiveKey={this.getDefaultLoginMethod(application)} onChange={(key) => {
+          <Tabs className="signin-methods" items={items} size={"small"} activeKey={this.state.loginMethod} onChange={(key) => {
             this.setState({loginMethod: key});
           }} centered>
           </Tabs>
