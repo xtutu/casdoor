@@ -178,6 +178,8 @@ func handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
 		e.AddAttribute("homeDirectory", message.AttributeValue("/home/"+user.Name))
 		e.AddAttribute("cn", message.AttributeValue(user.Name))
 		e.AddAttribute("uid", message.AttributeValue(user.Id))
+		e.AddAttribute("mail", message.AttributeValue(user.Email))
+		e.AddAttribute("email", message.AttributeValue(user.Email))
 		for _, group := range user.Groups {
 			e.AddAttribute(ldapMemberOfAttr, message.AttributeValue(group))
 		}
@@ -195,6 +197,8 @@ func handleSearch(w ldap.ResponseWriter, m *ldap.Message) {
 			}
 		}
 
+		// debug
+		fmt.Printf("%v\n", e)
 		w.Write(e)
 	}
 	w.Write(res)
